@@ -303,8 +303,7 @@ func (oc *Controller) addLogicalPort(pod *kapi.Pod) error {
 			"--may-exist", "lsp-add", logicalSwitch, portName,
 			"--", "lsp-set-addresses", portName, fmt.Sprintf("%s %s", annotation.MAC, annotation.IP.IP),
 			"--", "set", "logical_switch_port", portName, "external-ids:namespace="+pod.Namespace,
-			"external-ids:logical_switch="+logicalSwitch, "external-ids:pod=true",
-			"--", "--if-exists", "clear", "logical_switch_port", portName, "dynamic_addresses")
+			"external-ids:logical_switch="+logicalSwitch, "external-ids:pod=true")
 		if err != nil {
 			return fmt.Errorf("Failed to add logical port to switch "+
 				"stdout: %q, stderr: %q (%v)", out, stderr, err)
