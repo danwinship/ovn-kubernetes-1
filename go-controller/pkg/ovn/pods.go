@@ -205,18 +205,13 @@ func (oc *Controller) waitForNodeLogicalSwitch(nodeName string) error {
 	// Otherwise wait for the node logical switch to be created by the ClusterController.
 	// The node switch will be created very soon after startup so we should
 	// only be waiting here once per node at most.
-	var subnet string
+	var subnet *net.IPNet
 	if err := wait.PollImmediate(500*time.Millisecond, 30*time.Second, func() (bool, error) {
 		var err error
-		if subnet, _, err = util.RunOVNNbctl("get", "logical_switch", nodeName, "other-config:subnet"); err != nil {
-			return false, nil
-		}
-		if subnet == "" {
-			return false, nil
-		}
-		return true, nil
+		subnet, err = util.GetLogicalSwitchSubnet(nodeName)
+		return err == nil, nil
 	}); err != nil {
-		logrus.Errorf("timed out waiting for logical switch %q other-config:subnet: %v", nodeName, err)
+		logrus.Errorf("timed out waiting for logical switch %q subnet: %v", nodeName, err)
 		return err
 	}
 

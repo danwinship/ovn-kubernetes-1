@@ -103,20 +103,12 @@ func ensureGatewayPortAddress(portName string) (net.HardwareAddr, *net.IPNet, er
 	}
 
 	// Grab the 'join' switch prefix length to add to our gateway router's IP
-	cidrStr, stderr, err := RunOVNNbctl("--if-exists", "get",
-		"logical_switch", "join", config.OtherConfigSubnet())
+	cidr, err := GetLogicalSwitchSubnet("join")
 	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to get 'join' switch external-ids: "+
-			"stderr: %q, %v", stderr, err)
-	}
-	_, cidr, err := net.ParseCIDR(cidrStr)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to parse 'join' switch subnet %q: %v",
-			cidrStr, err)
-	}
-	if !cidr.Contains(ip) {
+		return nil, nil, err
+	} else if !cidr.Contains(ip) {
 		return nil, nil, fmt.Errorf("gateway router port %q IP %q not "+
-			"contained in 'join' switch subnet %q", portName, ip, cidrStr)
+			"contained in 'join' switch subnet %q", portName, ip, cidr.String())
 	}
 	cidr.IP = ip
 

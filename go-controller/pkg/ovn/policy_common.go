@@ -404,12 +404,7 @@ const (
 	defaultMcastAllowPriority = "1012"
 )
 
-func addAllowACLFromNode(logicalSwitch, subnet string) error {
-	_, nodeCidr, err := net.ParseCIDR(subnet)
-	if err != nil {
-		logrus.Errorf("failed to parse subnet %s", subnet)
-		return err
-	}
+func addAllowACLFromNode(logicalSwitch string, nodeCidr *net.IPNet) error {
 	_, portIPnet := util.GetNodeWellKnownAddresses(nodeCidr)
 
 	match := fmt.Sprintf("%s.src==%s", ipMatch(), portIPnet.IP.String())
