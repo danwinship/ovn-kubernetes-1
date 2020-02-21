@@ -1,8 +1,7 @@
 package cni
 
 // cnishim hack to add an IPv4 interface to pods that need IPv4 access
-// in nominally single-stack IPv6 AWS clusters (for access to AWS API
-// or DNS endpoints)
+// in nominally single-stack IPv6 clusters on dual-stack cloud hosts
 
 import (
 	"context"
@@ -15,15 +14,33 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 )
 
-var ipv4HackPods = map[string]string{
-	// namespace: pod name prefix
-	"openshift-authentication-operator":   "authentication-operator",
-	"openshift-cloud-credential-operator": "cloud-credential-operator",
-	"openshift-console":                   "console",
-	"openshift-dns":                       "dns-default",
-	"openshift-image-registry":            "cluster-image-registry-operator",
-	"openshift-ingress-operator":          "ingress-operator",
-	"openshift-machine-api":               "machine-api-controllers",
+var ipv4HackPodsByPlatform = map[string]map[string][]string{
+	"aws": {
+		// Operators that need AWS API access, which is IPv4-only
+		"openshift-authentication-operator":   []string{"authentication-operator"},
+		"openshift-cloud-credential-operator": []string{"cloud-credential-operator"},
+		"openshift-image-registry":            []string{"cluster-image-registry-operator"},
+		"openshift-ingress-operator":          []string{"ingress-operator"},
+		"openshift-machine-api":               []string{"machine-api-controllers"},
+
+		// AWS upstream DNS servers are IPv4 only
+		"openshift-dns": []string{"dns-default"},
+
+		// Needs to talk to ingress, which is IPv4-only in AWS
+		"openshift-console": []string{"console"},
+	},
+	"azure": {
+		// Operators that need Azure API access, which is IPv4-only
+		"openshift-authentication-operator":   []string{"authentication-operator"},
+		"openshift-cloud-credential-operator": []string{"cloud-credential-operator"},
+		"openshift-image-registry":            []string{"cluster-image-registry-operator", "image-registry"},
+		"openshift-ingress-operator":          []string{"ingress-operator"},
+		"openshift-machine-api":               []string{"machine-api-controllers"},
+
+		// We currently get IPv4 nameservers but this can be fixed
+		// https://bugzilla.redhat.com/show_bug.cgi?id=1803832
+		"openshift-dns": []string{"dns-default"},
+	},
 }
 
 func maybeAddIPv4Hack(args *skel.CmdArgs, result *current.Result) error {
@@ -32,9 +49,20 @@ func maybeAddIPv4Hack(args *skel.CmdArgs, result *current.Result) error {
 		return nil
 	}
 
-	// Only need IPv4 hack on AWS
+	// Find hack pods for cloud platform
 	bytes, err := ioutil.ReadFile("/proc/cmdline")
-	if err != nil || !strings.Contains(string(bytes), "ignition.platform.id=aws") {
+	if err != nil {
+		return nil
+	}
+	var ipv4HackPods map[string][]string
+	for _, arg := range strings.Split(strings.TrimSpace(string(bytes)), " ") {
+		if strings.HasPrefix(arg, "ignition.platform.id=") {
+			id := strings.Split(arg, "=")
+			ipv4HackPods = ipv4HackPodsByPlatform[id[1]]
+			break
+		}
+	}
+	if ipv4HackPods == nil {
 		return nil
 	}
 
@@ -53,8 +81,14 @@ func maybeAddIPv4Hack(args *skel.CmdArgs, result *current.Result) error {
 		return nil
 	}
 
-	prefix := ipv4HackPods[namespace]
-	if prefix == "" || !strings.HasPrefix(name, prefix) {
+	match := false
+	for _, prefix := range ipv4HackPods[namespace] {
+		if strings.HasPrefix(name, prefix) {
+			match = true
+			break
+		}
+	}
+	if !match {
 		return nil
 	}
 
